@@ -1,0 +1,132 @@
+//VEHICLE TRACKING SYSTEM
+
+#include <TinyGPS++.h>
+#include <SoftwareSerial.h>
+
+TinyGPSPlus gps; // The TinyGPS++ object
+int temp=0,i;
+
+SoftwareSerial ss(4, 3); // The serial connection to the GPS device
+String stringVal = "";
+void setup()
+{
+  Serial.begin(9600);  //To start the serial communication
+  ss.begin(9600);  //To start the communication with the GPS module
+  gsm_init();   //To set-up the GSM module
+  Serial.println("AT+CNMI=2,2,0,0,0");  //Setting the GSM module to "Receive" mode, so that it can read the incoming messages
+  delay(2000);
+  temp=0;
+}
+
+void loop()
+{ 
+serialEvent();
+
+      while(temp)
+      {
+        while (ss.available() > 0)  //A check to find whether the GPS module is properly connected or not
+        {
+          gps.encode(ss.read());
+                if (gps.location.isUpdated())  //Checks whether the location gained by the GPS module is updated or not
+                {
+                 temp=0;
+                 tracking();  //Control of the code goes to the tracking section, to get the coordinates
+                } 
+          if(!temp)
+          break;  
+        }
+      }
+}
+void serialEvent()
+{
+  while(Serial.available()>0)  //Checks whether a message has been received or not
+  { 
+    if(Serial.find("TRACK"))  //Checks for "TRACK" in the received message, so as to send the coordinates as a reply
+    {
+      temp=1;
+      break;
+    }
+    else
+    {
+    temp=0;
+    }
+  }
+}
+void gsm_init()  // Setup of the GSM module
+{
+  boolean at_flag=1;
+  while(at_flag)
+  {
+    Serial.println("AT");  //To check communication between GSM module and arduino
+    delay(1);
+    while(Serial.available()>0)
+    {
+      if(Serial.find("OK"))
+      at_flag=0;
+    }
+    
+    delay(1000);
+  }
+  delay(1000);
+  boolean echo_flag=1;
+  while(echo_flag)
+  {
+    Serial.println("ATE0");  //To turn off the echo in the gsm module
+    while(Serial.available()>0)
+    {
+      if(Serial.find("OK"))
+      echo_flag=0;
+    }
+    delay(1000);
+  }
+  delay(1000);
+  boolean net_flag=1;
+  while(net_flag)
+  {
+    Serial.println("AT+CPIN?"); //To check whether a PIN code is required to use the sim card or not
+    while(Serial.available()>0)
+    {
+      if(Serial.find("+CPIN: READY"))
+      net_flag=0;
+    }
+    delay(1000);
+  }
+  delay(1000);
+}
+void init_sms()
+{
+  Serial.println("AT+CMGF=1");  // Setting the GSM module to "Text" mode
+  delay(400);
+  Serial.println("AT+CMGS=\"XXXXXXXXXX\"");   // Setting the GSM module to "Send" mode, to send the coordinates to the number mentioned ; Replace X's with a 10 digit phone number
+  delay(400);
+}
+void send_data(String message)
+{
+  Serial.print(message);
+  delay(200);
+}
+void send_sms()
+{
+  Serial.write(26);  //ASCII code for Ctrl+Z ,to depict end of message
+}
+void tracking()
+{
+    init_sms();
+    send_data("Vehicle Tracking Alert:");
+    Serial.println(" "); 
+    send_data("Your Vehicle Current Location is:");
+    Serial.println(" "); 
+    Serial.print("Latitude: ");
+    Serial.print(gps.location.lat(), 6); //To receive the latitude from the GPS module, with 6 digits after the decimal
+    Serial.print("\n Longitude: ");
+    Serial.println(gps.location.lng(), 6); //To receive the longitude from the GPS module, with 6 digits after the decimal
+
+   // To create a link of the coordinates that can be opened through Google maps
+   Serial.print("https://www.google.com/maps/@");
+   Serial.print(gps.location.lat(), 6);
+   Serial.print(',');
+   Serial.print(gps.location.lng(), 6);
+   Serial.print(",14z");
+   send_sms();
+   delay(2000);
+}
